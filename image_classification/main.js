@@ -76,13 +76,24 @@ async function fetchLabels(url) {
 $(document).ready(async () => {
   $('.icdisplay').hide();
   if (await utils.isWebNN()) {
-    $('#cpu').click();
+    $('#npu').click();
   } else {
     console.log(utils.webNNNotSupportMessage());
     ui.addAlert(utils.webNNNotSupportMessageHTML());
   }
   layout = await utils.getDefaultLayout('cpu');
 });
+// Auto-select MobileNet V2, NPU, and trigger camera on page load
+setTimeout(() => {
+   $('#npu').click();
+   setTimeout(() => {
+        $('#mobilenet').click();
+        setTimeout(() => {
+               inputType = 'camera';
+               $('#cam').click();
+             }, 500);
+      }, 500);
+  }, 1000);
 
 $('#deviceTypeBtns .btn').on('change', async (e) => {
   if (inputType === 'camera') {
