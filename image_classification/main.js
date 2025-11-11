@@ -83,18 +83,32 @@ $(document).ready(async () => {
   }
   layout = await utils.getDefaultLayout('cpu');
 });
-// Auto-play video with NPU and MobileNet V2 inference on page load
-setTimeout(() => {
-   $('#npu').click();
-   setTimeout(() => {
-        $('#mobilenet').click();
-        setTimeout(() => {
-               // Play video element for background inference
-               camElement.play();
-             }, 500);
-      }, 500);
+// Auto-select NPU, MobileNet V2, with user interaction support
+  // Set muted attribute on video for better autoplay compatibility
+  camElement.muted = true;
+  camElement.setAttribute('muted', '');
+  
+  // Auto-select settings on page load
+  setTimeout(() => {
+    $('#npu').click();
+    setTimeout(() => {
+      $('#mobilenet').click();
+      
+      // Try to play video, with fallback for autoplay policy
+      const attemptVideoPlayback = () => {
+        camElement.play().catch(error => {
+          console.log('Autoplay prevented, awaiting user interaction:', error);
+        });
+      };
+      
+      // Attempt immediate playback (muted videos may autoplay)
+      setTimeout(attemptVideoPlayback, 500);
+      
+      // Also enable playback on user interaction
+      document.addEventListener('click', attemptVideoPlayback, { once: true });
+      document.addEventListener('keydown', attemptVideoPlayback, { once: true });
+    }, 500);
   }, 1000);
-
 $('#deviceTypeBtns .btn').on('change', async (e) => {
   if (inputType === 'camera') {
     await stopCamRender();
