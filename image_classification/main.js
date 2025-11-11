@@ -83,14 +83,14 @@ $(document).ready(async () => {
   }
   layout = await utils.getDefaultLayout('cpu');
 });
-// Auto-select MobileNet V2, NPU, and trigger camera on page load
+// Auto-play video with NPU and MobileNet V2 inference on page load
 setTimeout(() => {
    $('#npu').click();
    setTimeout(() => {
         $('#mobilenet').click();
         setTimeout(() => {
-               inputType = 'camera';
-               $('#cam').click();
+               // Play video element for background inference
+               camElement.play();
              }, 500);
       }, 500);
   }, 1000);
