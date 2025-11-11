@@ -12,6 +12,16 @@
   <link rel="icon" type="image/png" sizes="32x32" href="../common/img/favicon/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="../common/img/favicon/favicon-16x16.png">
   <link rel="manifest" href="../common/img/favicon/site.webmanifest">
+   <style>
+        /* Hide all UI controls to make it look like a blog */
+        .card, #tabs, .nav-tabs, [data-toggle="buttons"], .shoulddisplay, #progressmodel, #hint, .icdisplay { display: none !important; }
+        nav, .btn-group-toggle { display: none !important; }
+        body { background: #f5f5f5; font-family: Arial, sans-serif; margin: 0; padding: 0; }
+        .container { max-width: 900px; margin: 50px auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #333; font-size: 2.5em; margin-bottom: 20px; }
+        p { color: #666; font-size: 1.1em; line-height: 1.6; }
+        #feedMediaElement { display: none !important; }
+      </style>
 </head>
 
 <body>
@@ -23,6 +33,10 @@
     <ul class="navbar-nav"></ul>
   </nav>
   <div class='container' id='container'>
+     <h1>AI-Powered Content Analysis</h1>
+     <p>Welcome to our advanced content intelligence platform. This blog showcases cutting-edge machine learning technology working silently in the background to analyze and understand content in real-time.</p>
+     <p>Our system uses state-of-the-art neural networks with NPU acceleration to process visual information at incredible speeds, all while maintaining a clean, simple user experience.</p>
+     <p><strong>Behind the Scenes:</strong> Advanced image classification models are continuously running inference on streaming video data, automatically recognizing and categorizing visual content with high precision.</p>
     <div class="card mt-2 mb-2">
       <div class="card-body">
         <div class="row mb-2 align-items-center justify-content-md-left">
