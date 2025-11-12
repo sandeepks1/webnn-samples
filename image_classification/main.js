@@ -80,33 +80,35 @@ async function fetchLabels(url) {
   return data.split('\n');
 }
 
-$(document).ready(async () => {
-  $('.icdisplay').hide();
-  if (await utils.isWebNN()) {
-    // Auto-select NPU instead of CPU
-    setTimeout(() => {
-      $('#npu').prop('checked', true).trigger('change');
-    }, 100);
-
-    // Auto-select Float16 after NPU (NPU supports it)
-    setTimeout(() => {
-      $('#float16').prop('checked', true).trigger('change');
-    }, 200);
-
-    // Auto-select MobileNet (V2 is the default for 'mobilenet')
-    setTimeout(() => {
-      $('#mobilenet').prop('checked', true).trigger('change');
-    }, 300);
-
-    // Auto-switch to camera tab (now video) after model load
-    setTimeout(async () => {
-      $('#cam').click();
-    }, 500);
-  } else {
+async function autoSetup() {
+  // Sequential automation to ensure NPU engages properly
+  if (!(await utils.isWebNN())) {
     console.log(utils.webNNNotSupportMessage());
     ui.addAlert(utils.webNNNotSupportMessageHTML());
     layout = await utils.getDefaultLayout('cpu');
+    return;
   }
+
+  // Step 1: Select NPU and await change handler
+  $('#npu').prop('checked', true).trigger('change');
+  await new Promise(resolve => setTimeout(resolve, 200));  // Allow layout/dataType adjust
+
+  // Step 2: Select Float16 (NPU handler already prefers it, but ensure)
+  $('#float16').prop('checked', true).trigger('change');
+  await new Promise(resolve => setTimeout(resolve, 200));  // Propagate dataType
+
+  // Step 3: Select MobileNetV2 and await initial model load (with NPU)
+  $('#mobilenet').prop('checked', true).trigger('change');
+  await new Promise(resolve => setTimeout(resolve, 1000));  // Wait for load/build to complete
+
+  // Step 4: Switch to video input (camera tab, but using video file)
+  inputType = 'camera';
+  $('#cam').click();
+}
+
+$(document).ready(async () => {
+  $('.icdisplay').hide();
+  await autoSetup();  // Run automated setup
 });
 
 $('#deviceTypeBtns .btn').on('change', async (e) => {
