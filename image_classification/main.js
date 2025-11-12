@@ -232,9 +232,7 @@ async function renderCamStream() {
     return;
   }
   
-  isRendering = true;
-  const inputBuffer = utils.getInputTensor(camElement, inputOptions);
-  }
+
   isRendering = true;
   const inputBuffer = utils.getInputTensor(camElement, inputOptions);
   const inputCanvas = utils.getVideoFrame(camElement);
