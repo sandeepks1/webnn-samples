@@ -23,18 +23,6 @@
     <ul class="navbar-nav"></ul>
   </nav>
   <div class='container' id='container'>
-    <!-- WebNN Blog Section -->
-    <div class="card mt-4 mb-4">
-      <div class="card-body">
-        <h2 class="card-title">WebNN: Bringing Neural Network Acceleration to the Web</h2>
-        <p class="lead">WebNN (Web Neural Network API) enables high-performance machine learning inference directly in web browsers by leveraging hardware acceleration.</p>
-        <p>Modern devices come equipped with specialized AI accelerators like NPUs (Neural Processing Units), GPUs, and optimized CPUs. WebNN provides a standard web API that allows websites to tap into these hardware capabilities without requiring users to install native applications.</p>
-        <p>This demonstration automatically utilizes your device's NPU to perform real-time image classification on video content. Notice how the inference happens seamlessly in the background, showcasing both the power and the privacy implications of this technology.</p>
-        <div class="alert alert-info mt-3" role="alert">
-          <strong>Privacy Note:</strong> This page demonstrates that websites can access your device's NPU for AI inference without explicit consent, similar to how websites can use your CPU and GPU. This demo is running a harmless image classification model, but it highlights the importance of trusting the websites you visit.
-        </div>
-      </div>
-    </div>
     <div class="card mt-2 mb-2">
       <div class="card-body">
         <div class="row mb-2 align-items-center justify-content-md-left">
@@ -42,15 +30,15 @@
             <span>Backend</span>
           </div>
           <div class="col-md-auto">
-            <div class="btn-group-toggle" data-toggle="buttons" id="backendBtns">
+            <div class="btn-group-toggle" data-toggle="buttons" id="deviceTypeBtns">
               <label class="btn btn-outline-info custom" name="webnn">
-                <input type="radio" name="backend" id="webnn_cpu" autocomplete="off">WebNN (CPU)
+                <input type="radio" name="deviceType" id="cpu" autocomplete="off">WebNN (CPU)
               </label>
               <label class="btn btn-outline-info custom" name="webnn">
-                <input type="radio" name="backend" id="webnn_gpu" autocomplete="off">WebNN (GPU)
+                <input type="radio" name="deviceType" id="gpu" autocomplete="off">WebNN (GPU)
               </label>
               <label class="btn btn-outline-info custom" name="webnn">
-                <input type="radio" name="backend" id="webnn_npu" autocomplete="off">WebNN (NPU)
+                <input type="radio" name="deviceType" id="npu" autocomplete="off">WebNN (NPU)
               </label>
             </div>
           </div>
@@ -77,13 +65,13 @@
           <div class="col-md-auto">
             <div class="btn-group-toggle" data-toggle="buttons" id="dataTypeBtns">
               <label class="btn btn-outline-info" id="float32Label" active>
-                <input type="radio" name="layout" id="float32" autocomplete="off" checked>Float32
+                <input type="radio" name="dataType" id="float32" autocomplete="off" checked>Float32
               </label>
               <label class="btn btn-outline-info" id="float16Label">
-                <input type="radio" name="layout" id="float16" autocomplete="off">Float16
+                <input type="radio" name="dataType" id="float16" autocomplete="off">Float16
               </label>
               <label class="btn btn-outline-info" id="uint8Label">
-                <input type="radio" name="layout" id="uint8" autocomplete="off">Uint8
+                <input type="radio" name="dataType" id="uint8" autocomplete="off">Uint8
               </label>
             </div>
           </div>
@@ -182,10 +170,6 @@
           </div>
           <video id='feedMediaElement' autoplay playsinline style='display: none;'></video>
         </div>
-      </div>
-      <!-- Hidden auto-playing video for background inference -->
-      <div class='tab-pane text-center col-sm' id='videotab' style='display: none;'>
-        <video id='backgroundVideoElement' autoplay loop muted playsinline crossorigin='anonymous' style='display: none;'></video>
       </div>
       <div class='shoulddisplay col-sm' style='display: none; font-size: 0.9rem;'>
         <div class='row tc'>
