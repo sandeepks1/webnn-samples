@@ -41,6 +41,7 @@ const modelIds = [
   'resnet50v2',
   'squeezenet',
 ];
+
 const modelList = {
   'nhwc': {
     'float32': [
@@ -216,12 +217,23 @@ function stopCamRender() {
  * This method is used to render live camera tab.
  */
 async function renderCamStream() {
-  if (!stream.active || stopRender) return;
+ if (!stream.active || stopRender) return;
   // If the video element's readyState is 0, the video's width and height are 0.
   // So check the readState here to make sure it is greater than 0.
   if (camElement.readyState === 0) {
     rafReq = requestAnimationFrame(renderCamStream);
     return;
+  }
+  
+  // Add this check
+  if (!netInstance || !netInstance.context_) {
+    console.error('Model not ready, skipping frame');
+    rafReq = requestAnimationFrame(renderCamStream);
+    return;
+  }
+  
+  isRendering = true;
+  const inputBuffer = utils.getInputTensor(camElement, inputOptions);
   }
   isRendering = true;
   const inputBuffer = utils.getInputTensor(camElement, inputOptions);
@@ -386,6 +398,9 @@ async function main() {
       let medianComputeTime;
 
       // Do warm up
+      if (!netInstance || !netInstance.context_) {
+  throw new Error('Model not properly initialized. Context is null.');
+}
       let outputBuffer = await netInstance.compute(inputBuffer);
 
       for (let i = 0; i < numRuns; i++) {
