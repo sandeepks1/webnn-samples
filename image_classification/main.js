@@ -188,7 +188,10 @@ $('#imageFile').change((e) => {
 });
 
 $('#feedElement').on('load', async () => {
-  await main();
+  // Don't trigger main() if we're in bgvideo mode (auto-init)
+  if (inputType !== 'bgvideo') {
+    await main();
+  }
 });
 
 // Click trigger to do inference with <video> media element
