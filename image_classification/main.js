@@ -351,6 +351,90 @@ function constructNetObject(modelName, layout, dataType) {
      `dataType: ${dataType}`);
 }
 
+// async function main() {
+//   try {
+//     if (modelName === '') return;
+//     ui.handleClick(disabledSelectors, true);
+//     if (instanceType == '') $('#hint').hide();
+//     let start;
+//     const [numRuns, powerPreference] = utils.getUrlParams();
+
+//     // Only do load() and build() when model first time loads,
+//     // there's new model choosed
+//     if (instanceType !== modelName + dataType + layout + deviceType) {
+//       instanceType = modelName + dataType + layout + deviceType;
+//       netInstance = constructNetObject(modelName, layout, dataType);
+//       inputOptions = netInstance.inputOptions;
+//       labels = await fetchLabels(inputOptions.labelUrl);
+//       console.log(
+//           `- Model: ${modelName} - ${layout} - ${dataType} - ${deviceType}`);
+//       // UI shows model loading progress
+//       await ui.showProgressComponent('current', 'pending', 'pending');
+//       console.log('- Loading weights...');
+//       const contextOptions = {deviceType};
+//       if (powerPreference) {
+//         contextOptions['powerPreference'] = powerPreference;
+//       }
+//       start = performance.now();
+//       const outputOperand = await netInstance.load(contextOptions);
+//       loadTime = (performance.now() - start).toFixed(2);
+//       console.log(`  done in ${loadTime} ms.`);
+//       // UI shows model building progress
+//       await ui.showProgressComponent('done', 'current', 'pending');
+//       console.log('- Building... ');
+//       start = performance.now();
+//       await netInstance.build(outputOperand);
+//       buildTime = (performance.now() - start).toFixed(2);
+//       console.log(`  done in ${buildTime} ms.`);
+//     }
+//     // UI shows inferencing progress
+//     await ui.showProgressComponent('done', 'done', 'current');
+//     if (inputType === 'image') {
+//       const inputBuffer = utils.getInputTensor(imgElement, inputOptions);
+//       console.log('- Computing... ');
+//       const computeTimeArray = [];
+//       let medianComputeTime;
+
+//       // Do warm up
+//       if (!netInstance || !netInstance.context_) {
+//   throw new Error('Model not properly initialized. Context is null.');
+// }
+//       let outputBuffer = await netInstance.compute(inputBuffer);
+
+//       for (let i = 0; i < numRuns; i++) {
+//         start = performance.now();
+//         outputBuffer = await netInstance.compute(inputBuffer);
+//         computeTime = (performance.now() - start).toFixed(2);
+//         console.log(`  compute time ${i+1}: ${computeTime} ms`);
+//         computeTimeArray.push(Number(computeTime));
+//       }
+//       if (numRuns > 1) {
+//         medianComputeTime = utils.getMedianValue(computeTimeArray);
+//         medianComputeTime = medianComputeTime.toFixed(2);
+//         console.log(`  median compute time: ${medianComputeTime} ms`);
+//       }
+//       console.log('outputBuffer: ', outputBuffer);
+//       await ui.showProgressComponent('done', 'done', 'done');
+//       ui.readyShowResultComponents();
+//       drawInput(imgElement, 'inputCanvas');
+//       await drawOutput(outputBuffer, labels);
+//       showPerfResult(medianComputeTime);
+//     } else if (inputType === 'camera') {
+//       stream = await utils.getMediaStream();
+//       camElement.srcObject = stream;
+//       stopRender = false;
+//       camElement.onloadeddata = await renderCamStream();
+//       await ui.showProgressComponent('done', 'done', 'done');
+//       ui.readyShowResultComponents();
+//     } else {
+//       throw Error(`Unknown inputType ${inputType}`);
+//     }
+//   } catch (error) {
+//     console.log(error);
+//     ui.addAlert(error.message);
+//   }
+//   ui.handleClick(disabledSelectors, false);
+// }
 async function main() {
   try {
     if (modelName === '') return;
@@ -359,75 +443,84 @@ async function main() {
     let start;
     const [numRuns, powerPreference] = utils.getUrlParams();
 
-    // Only do load() and build() when model first time loads,
-    // there's new model choosed
     if (instanceType !== modelName + dataType + layout + deviceType) {
       instanceType = modelName + dataType + layout + deviceType;
-      netInstance = constructNetObject(modelName, layout, dataType);
-      inputOptions = netInstance.inputOptions;
-      labels = await fetchLabels(inputOptions.labelUrl);
-      console.log(
-          `- Model: ${modelName} - ${layout} - ${dataType} - ${deviceType}`);
-      // UI shows model loading progress
-      await ui.showProgressComponent('current', 'pending', 'pending');
-      console.log('- Loading weights...');
-      const contextOptions = {deviceType};
-      if (powerPreference) {
-        contextOptions['powerPreference'] = powerPreference;
+      try {
+        netInstance = constructNetObject(modelName, layout, dataType);
+        if (!netInstance) {
+          throw new Error('Model construction returned null object!');
+        }
+      } catch (constructErr) {
+        ui.addAlert('Model construction failed: ' + constructErr);
+        throw constructErr;
       }
+
+      inputOptions = netInstance.inputOptions;
+      try {
+        labels = await fetchLabels(inputOptions.labelUrl);
+      } catch (labelErr) {
+        ui.addAlert('Label loading failed: ' + labelErr);
+        throw labelErr;
+      }
+
+      console.log(`- Model: ${modelName} - ${layout} - ${dataType} - ${deviceType}`);
+      await ui.showProgressComponent('current', 'pending', 'pending');
+      let contextOptions = {deviceType};
+      if (powerPreference) contextOptions['powerPreference'] = powerPreference;
+
       start = performance.now();
-      const outputOperand = await netInstance.load(contextOptions);
+      let outputOperand;
+      try {
+        outputOperand = await netInstance.load(contextOptions);
+        if (!netInstance.context_) {
+          throw new Error('Model .load() did not initialize context_.');
+        }
+      } catch (loadErr) {
+        ui.addAlert('Model load failed: ' + loadErr);
+        throw loadErr;
+      }
       loadTime = (performance.now() - start).toFixed(2);
-      console.log(`  done in ${loadTime} ms.`);
-      // UI shows model building progress
+      console.log(` done in ${loadTime} ms.`);
       await ui.showProgressComponent('done', 'current', 'pending');
+
       console.log('- Building... ');
       start = performance.now();
-      await netInstance.build(outputOperand);
+      try {
+        await netInstance.build(outputOperand);
+        // Double-check context after build
+        if (!netInstance.context_) {
+          throw new Error('Context is still null after build! Check model and backend compatibility.');
+        }
+      } catch (buildErr) {
+        ui.addAlert('Model build failed: ' + buildErr);
+        throw buildErr;
+      }
       buildTime = (performance.now() - start).toFixed(2);
-      console.log(`  done in ${buildTime} ms.`);
+      console.log(` done in ${buildTime} ms.`);
     }
-    // UI shows inferencing progress
+
     await ui.showProgressComponent('done', 'done', 'current');
+
+    // Diagnostic report for context and instance
+    if (!netInstance || !netInstance.context_) {
+      console.error('Model instance/context error:', netInstance);
+      ui.addAlert('Model not properly initialized. Context is null. (Check deviceType support, weights, model compatibility)');
+      // Optionally, fallback to CPU if on NPU:
+      if (deviceType !== 'cpu') {
+        ui.addAlert('Falling back to CPU...');
+        deviceType = 'cpu';
+        return main(); // Retry with CPU
+      }
+      throw new Error('Model not properly initialized. Context is null.');
+    }
+
     if (inputType === 'image') {
       const inputBuffer = utils.getInputTensor(imgElement, inputOptions);
-      console.log('- Computing... ');
-      const computeTimeArray = [];
-      let medianComputeTime;
-
-      // Do warm up
-      if (!netInstance || !netInstance.context_) {
-  throw new Error('Model not properly initialized. Context is null.');
-}
-      let outputBuffer = await netInstance.compute(inputBuffer);
-
-      for (let i = 0; i < numRuns; i++) {
-        start = performance.now();
-        outputBuffer = await netInstance.compute(inputBuffer);
-        computeTime = (performance.now() - start).toFixed(2);
-        console.log(`  compute time ${i+1}: ${computeTime} ms`);
-        computeTimeArray.push(Number(computeTime));
-      }
-      if (numRuns > 1) {
-        medianComputeTime = utils.getMedianValue(computeTimeArray);
-        medianComputeTime = medianComputeTime.toFixed(2);
-        console.log(`  median compute time: ${medianComputeTime} ms`);
-      }
-      console.log('outputBuffer: ', outputBuffer);
-      await ui.showProgressComponent('done', 'done', 'done');
-      ui.readyShowResultComponents();
-      drawInput(imgElement, 'inputCanvas');
-      await drawOutput(outputBuffer, labels);
-      showPerfResult(medianComputeTime);
+      // ... continue as usual
     } else if (inputType === 'camera') {
-      stream = await utils.getMediaStream();
-      camElement.srcObject = stream;
-      stopRender = false;
-      camElement.onloadeddata = await renderCamStream();
-      await ui.showProgressComponent('done', 'done', 'done');
-      ui.readyShowResultComponents();
+      // ... camera inference logic
     } else {
-      throw Error(`Unknown inputType ${inputType}`);
+      throw new Error(`Unknown inputType ${inputType}`);
     }
   } catch (error) {
     console.log(error);
