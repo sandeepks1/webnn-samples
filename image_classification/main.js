@@ -256,13 +256,6 @@ async function renderBgVideoStream() {
     return;
   }
   
-  // Check if model is ready
-  if (!netInstance || !inputOptions || !labels) {
-    console.log('Model not ready yet, waiting...');
-    bgVideoRafReq = requestAnimationFrame(renderBgVideoStream);
-    return;
-  }
-  
   isRendering = true;
   const inputBuffer = utils.getInputTensor(bgVideoElement, inputOptions);
   console.log('- Computing on background video... ');
@@ -416,6 +409,7 @@ async function main() {
       await ui.showProgressComponent('current', 'pending', 'pending');
       console.log('- Loading weights... ');
       const contextOptions = {deviceType};
+      console.log(`  Using device: ${deviceType}`);
       if (powerPreference) {
         contextOptions['powerPreference'] = powerPreference;
       }
@@ -468,12 +462,12 @@ async function main() {
       await ui.showProgressComponent('done', 'done', 'done');
       ui.readyShowResultComponents();
     } else if (inputType === 'bgvideo') {
-      // Background video inference
-      isBgVideoPlaying = true;
-      bgVideoElement.play();
-      await renderBgVideoStream();
+      // Background video inference - start AFTER model is built
       await ui.showProgressComponent('done', 'done', 'done');
       ui.readyShowResultComponents();
+      isBgVideoPlaying = true;
+      bgVideoElement.play();
+      renderBgVideoStream(); // Start the rendering loop
     } else {
       throw Error(`Unknown inputType ${inputType}`);
     }
