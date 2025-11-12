@@ -55,7 +55,7 @@ const modelList = {
       'squeezenet',
       'resnet50v2',
     ],
-    'float32': [
+    'float16': [
       'mobilenet',
       'squeezenet',
       'resnet50v2',
@@ -80,6 +80,75 @@ async function fetchLabels(url) {
   return data.split('\n');
 }
 
+async function loadModelOnly() {
+  // Load and build model without input setup
+  try {
+    if (modelName === '') return;
+    ui.handleClick(disabledSelectors, true);
+    if (instanceType == '') $('#hint').hide();
+    let start;
+
+    const [numRuns, powerPreference] = utils.getUrlParams();
+
+    if (instanceType !== modelName + dataType + layout + deviceType) {
+      instanceType = modelName + dataType + layout + deviceType;
+      netInstance = constructNetObject(modelName, layout, dataType);
+      inputOptions = netInstance.inputOptions;
+      labels = await fetchLabels(inputOptions.labelUrl);
+      console.log(
+        `- Model: ${modelName} - ${layout} - ${dataType} - ${deviceType}`);
+
+      // UI shows model loading progress
+      await ui.showProgressComponent('current', 'pending', 'pending');
+
+      console.log('- Loading weights...');
+      const contextOptions = {deviceType};
+      if (powerPreference) {
+        contextOptions['powerPreference'] = powerPreference;
+      }
+
+      start = performance.now();
+      const outputOperand = await netInstance.load(contextOptions);
+      loadTime = (performance.now() - start).toFixed(2);
+      console.log(` done in ${loadTime} ms.`);
+
+      // UI shows model building progress
+      await ui.showProgressComponent('done', 'current', 'pending');
+
+      console.log('- Building... ');
+      start = performance.now();
+      await netInstance.build(outputOperand);
+      buildTime = (performance.now() - start).toFixed(2);
+      console.log(` done in ${buildTime} ms.`);
+
+      // Model loaded on NPU - show button for video start
+      await ui.showProgressComponent('done', 'done', 'done');
+      showStartVideoButton();
+    }
+  } catch (error) {
+    console.log(error);
+    ui.addAlert(error.message);
+    ui.handleClick(disabledSelectors, false);
+  }
+}
+
+function showStartVideoButton() {
+  // Remove if already exists
+  $('#startVideoBtn').remove();
+
+  // Create button and append after progress bars (or to body)
+  const button = $('<button id="startVideoBtn" class="btn btn-primary">Start Video Inference (NPU Ready)</button>');
+  button.on('click', async () => {
+    button.hide();  // Hide after click
+    inputType = 'camera';
+    $('#cam').parent().addClass('active');
+    $('.shoulddisplay').hide();
+    await main();  // Setup video and start rendering
+  });
+  button.appendTo($('#progressBars') || $('body'));  // Append to progress section or body
+  ui.handleClick(['#startVideoBtn'], false);  // Enable clicking
+}
+
 async function autoSetup() {
   if (!(await utils.isWebNN())) {
     console.log(utils.webNNNotSupportMessage());
@@ -94,14 +163,10 @@ async function autoSetup() {
   dataType = 'float16';
   modelName = 'mobilenet';
 
-  // Set input to video early to avoid image inference error
-  inputType = 'camera';
-
   // Update UI to reflect selections (no event triggers to avoid races)
   $('#npu').prop('checked', true).parent().addClass('active');
   $('#float16').prop('checked', true).parent().addClass('active');
   $('#mobilenet').prop('checked', true).parent().addClass('active');
-  $('#cam').parent().addClass('active');  // Highlight camera tab
 
   // Apply device-specific UI adjustments (from device change handler)
   const showUint8 = layout === 'nhwc' ? true : false;
@@ -124,10 +189,9 @@ async function autoSetup() {
 
   console.log(`- Auto-setup: Model: ${modelName} - ${layout} - ${dataType} - ${deviceType}`);
 
-  // Single main() call: loads/builds on NPU and sets up video rendering
+  // Load model on NPU only (no input yet)
   $('#hint').hide();
-  $('.shoulddisplay').hide();
-  await main();
+  await loadModelOnly();
 }
 
 $(document).ready(async () => {
@@ -381,22 +445,20 @@ async function main() {
   try {
     if (modelName === '') return;
     ui.handleClick(disabledSelectors, true);
-    if (instanceType == '') $('#hint').hide();
     let start;
 
-    const [numRuns, powerPreference] = utils.getUrlParams();
-
-    // Only do load() and build() when model first time loads,
-    // there's new model choosed
-    if (instanceType !== modelName + dataType + layout + deviceType) {
-      instanceType = modelName + dataType + layout + deviceType;
+    // Skip load/build if already done (reuse NPU model)
+    if (instanceType === modelName + dataType + layout + deviceType) {
+      ui.readyShowResultComponents();
+    } else {
+      // Fallback load/build (for manual changes)
+      const [numRuns, powerPreference] = utils.getUrlParams();
       netInstance = constructNetObject(modelName, layout, dataType);
       inputOptions = netInstance.inputOptions;
       labels = await fetchLabels(inputOptions.labelUrl);
       console.log(
         `- Model: ${modelName} - ${layout} - ${dataType} - ${deviceType}`);
 
-      // UI shows model loading progress
       await ui.showProgressComponent('current', 'pending', 'pending');
 
       console.log('- Loading weights...');
@@ -410,7 +472,6 @@ async function main() {
       loadTime = (performance.now() - start).toFixed(2);
       console.log(` done in ${loadTime} ms.`);
 
-      // UI shows model building progress
       await ui.showProgressComponent('done', 'current', 'pending');
 
       console.log('- Building... ');
@@ -431,6 +492,7 @@ async function main() {
 
       // Do warm up
       let outputBuffer = await netInstance.compute(inputBuffer);
+      const [numRuns] = utils.getUrlParams();
       for (let i = 0; i < numRuns; i++) {
         start = performance.now();
         outputBuffer = await netInstance.compute(inputBuffer);
@@ -452,12 +514,11 @@ async function main() {
       await drawOutput(outputBuffer, labels);
       showPerfResult(medianComputeTime);
     } else if (inputType === 'camera') {
-      // Use local video file instead of camera
+      // Use local video file instead of camera (user gesture from button enables play)
       camElement.src = './video3.mp4';
-      camElement.crossOrigin = 'anonymous';  // For potential CORS if needed
-      camElement.loop = true;  // Loop video for continuous inference
-      camElement.muted = true;  // Enable muted autoplay (always allowed)
-      camElement.autoplay = true;  // Leverage browser policy for auto-start
+      camElement.crossOrigin = 'anonymous';
+      camElement.loop = true;
+      camElement.muted = true;  // Muted for policy
       stopRender = false;
       
       // Wait for video to load
@@ -465,9 +526,8 @@ async function main() {
         camElement.addEventListener('loadeddata', resolve, { once: true });
       });
       
-      // Play with error handling (muted should bypass gesture requirement)
       camElement.play().catch(e => console.error('Video play error:', e));
-      camElement.onloadeddata = renderCamStream;  // Start rendering loop
+      camElement.onloadeddata = renderCamStream;
       await ui.showProgressComponent('done', 'done', 'done');
       ui.readyShowResultComponents();
     } else {
