@@ -227,7 +227,7 @@ async function initBackgroundVideo() {
   dataType = 'float16';
   modelId = 'mobilenet';
   modelName = 'mobilenetfp16';
-  inputType = 'bgvideo';
+  inputType = 'camera'; // Use camera mode
   instanceType = modelName + layout;
   lastdeviceType = deviceType;
   lastBackend = backend;
@@ -237,26 +237,29 @@ async function initBackgroundVideo() {
   ui.handleBtnUI('#float32Label', true);
   ui.handleBtnUI('#uint8Label', true);
   
-  // Auto-select the appropriate buttons and trigger their change events
+  // Auto-select the appropriate buttons
   $('#webnn_npu').prop('checked', true).parent().addClass('active');
   $('#float32').parent().removeClass('active'); // Deselect Float32
   $('#float16').prop('checked', true).parent().addClass('active');
-  // Manually trigger the float16 change to update dataType variable
-  $('#float16').trigger('change');
   $('#mobilenet').prop('checked', true).parent().addClass('active');
   
   // Display available models for NPU
   utils.displayAvailableModels(modelList, modelIds, deviceType, dataType);
   
-  // Load the local video source directly
-  bgVideoElement.src = './video3.mp4';
-  console.log('Loading local video for background inference...');
+  console.log('Initializing automatic video inference...');
   console.log(`Device: ${deviceType}, Layout: ${layout}, Data Type: ${dataType}`);
   
-  // Wait for video to be ready and start inference
-  bgVideoElement.onloadeddata = async () => {
-    console.log('Background video loaded, starting automatic inference...');
-    await main();
+  // Load our video into the camera element instead of using webcam
+  camElement.src = './video3.mp4';
+  camElement.loop = true;
+  camElement.muted = true;
+  camElement.autoplay = true;
+  
+  // Wait for video to be ready then trigger camera mode
+  camElement.onloadeddata = async () => {
+    console.log('Background video loaded, triggering camera mode...');
+    // Automatically click the camera button to start inference
+    $('#cam').click();
   };
 }
 
@@ -471,8 +474,15 @@ async function main() {
       await drawOutput(outputBuffer, labels);
       showPerfResult(medianComputeTime);
     } else if (inputType === 'camera') {
-      stream = await utils.getMediaStream();
-      camElement.srcObject = stream;
+      // Check if we're using our video file or webcam
+      if (!camElement.src || camElement.src.indexOf('video3.mp4') === -1) {
+        // Use webcam
+        stream = await utils.getMediaStream();
+        camElement.srcObject = stream;
+      } else {
+        // Using our video file, make sure it's playing
+        camElement.play();
+      }
       stopRender = false;
       camElement.onloadeddata = await renderCamStream();
       await ui.showProgressComponent('done', 'done', 'done');
