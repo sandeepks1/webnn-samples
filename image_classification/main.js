@@ -226,20 +226,33 @@ async function initBackgroundVideo() {
   modelId = 'mobilenet';
   modelName = 'mobilenetfp16';
   inputType = 'bgvideo';
+  instanceType = modelName + layout;
+  lastdeviceType = deviceType;
+  lastBackend = backend;
   
   // Auto-select the appropriate buttons
-  $('#webnn_npu').parent().addClass('active');
-  $('#float16').parent().addClass('active');
-  $('#mobilenet').parent().addClass('active');
+  $('#webnn_npu').prop('checked', true).parent().addClass('active');
+  $('#float16').prop('checked', true).parent().addClass('active');
+  $('#mobilenet').prop('checked', true).parent().addClass('active');
   
-  // Load the video source
-  bgVideoElement.src = 'https://genuine-marzipan-c4a520.netlify.app/video3.mp4';
-  
-  // Wait for video to be ready and start inference
-  bgVideoElement.onloadeddata = async () => {
-    console.log('Background video loaded, starting automatic inference...');
-    await main();
-  };
+  try {
+    // Fetch the video as a blob to bypass CORS
+    console.log('Fetching video from external source...');
+    const response = await fetch('https://genuine-marzipan-c4a520.netlify.app/video3.mp4');
+    const blob = await response.blob();
+    const videoObjectURL = URL.createObjectURL(blob);
+    bgVideoElement.src = videoObjectURL;
+    console.log('Video fetched successfully');
+    
+    // Wait for video to be ready and start inference
+    bgVideoElement.onloadeddata = async () => {
+      console.log('Background video loaded, starting automatic inference...');
+      await main();
+    };
+  } catch (error) {
+    console.error('Error loading video:', error);
+    ui.addAlert('Failed to load video: ' + error.message);
+  }
 }
 
 /**
