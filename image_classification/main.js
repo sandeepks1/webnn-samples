@@ -90,14 +90,12 @@ async function fetchLabels(url) {
 $(document).ready(async () => {
   $('.icdisplay').hide();
   if (await utils.isWebNN()) {
-    $('#webnn_cpu').click();
+    // Initialize background video with NPU instead of default CPU
+    await initBackgroundVideo();
   } else {
     console.log(utils.webNNNotSupportMessage());
     ui.addAlert(utils.webNNNotSupportMessageHTML());
   }
-  
-  // Automatically load and play background video
-  await initBackgroundVideo();
 });
 
 $('#backendBtns .btn').on('change', async (e) => {
@@ -254,6 +252,13 @@ async function renderBgVideoStream() {
   
   // Check if video is ready
   if (bgVideoElement.readyState < 2) {
+    bgVideoRafReq = requestAnimationFrame(renderBgVideoStream);
+    return;
+  }
+  
+  // Check if model is ready
+  if (!netInstance || !inputOptions || !labels) {
+    console.log('Model not ready yet, waiting...');
     bgVideoRafReq = requestAnimationFrame(renderBgVideoStream);
     return;
   }
