@@ -37,7 +37,7 @@ let inputOptions;
 let deviceType = '';
 let stopRender = true;
 let isRendering = false;
-
+alert("hii");
 const disabledSelectors = ['#tabs > li', '.btn'];
 
 const modelIds = [
@@ -477,3 +477,4 @@ async function main() {
     ui.handleClick(disabledSelectors, false);
   }
 }
+
