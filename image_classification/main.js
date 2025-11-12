@@ -17,11 +17,14 @@ const maxHeight = 380;
 const imgElement = document.getElementById('feedElement');
 imgElement.src = './images/test.jpg';
 const camElement = document.getElementById('feedMediaElement');
+const bgVideoElement = document.getElementById('backgroundVideoElement');
 let modelName = '';
-let layout = '';
+let modelId = '';
+let layout = 'nhwc';
 let dataType = 'float32';
-let instanceType = '';
+let instanceType = modelName + layout;
 let rafReq;
+let isFirstTimeLoad = true;
 let inputType = 'image';
 let netInstance = null;
 let labels = null;
@@ -31,24 +34,24 @@ let buildTime = 0;
 let computeTime = 0;
 let inputOptions;
 let deviceType = '';
+let lastdeviceType = '';
+let backend = '';
+let lastBackend = '';
 let stopRender = true;
 let isRendering = false;
+let isBgVideoPlaying = false;
+let bgVideoRafReq;
 const disabledSelectors = ['#tabs > li', '.btn'];
 const modelIds = [
-  'efficientnet',
   'mobilenet',
-  'resnet50v1',
-  'resnet50v2',
   'squeezenet',
+  'resnet50v2',
+  'resnet50v1',
+  'efficientnet',
 ];
 const modelList = {
-  'nhwc': {
+  'cpu': {
     'float32': [
-      'mobilenet',
-      'squeezenet',
-      'resnet50v2',
-    ],
-    'float16': [
       'mobilenet',
       'squeezenet',
       'resnet50v2',
@@ -57,13 +60,24 @@ const modelList = {
       'mobilenet',
     ],
   },
-  'nchw': {
+  'gpu': {
     'float32': [
       'mobilenet',
       'squeezenet',
       'resnet50v2',
     ],
-    'float16': modelIds,
+    'float16': [
+      'efficientnet',
+      'mobilenet',
+      'resnet50v1',
+    ],
+  },
+  'npu': {
+    'float16': [
+      'efficientnet',
+      'mobilenet',
+      'resnet50v1',
+    ],
   },
 };
 
@@ -76,36 +90,45 @@ async function fetchLabels(url) {
 $(document).ready(async () => {
   $('.icdisplay').hide();
   if (await utils.isWebNN()) {
-    $('#cpu').click();
+    // Initialize background video with NPU instead of default CPU
+    await initBackgroundVideo();
   } else {
     console.log(utils.webNNNotSupportMessage());
     ui.addAlert(utils.webNNNotSupportMessageHTML());
   }
-  layout = await utils.getDefaultLayout('cpu');
 });
 
-$('#deviceTypeBtns .btn').on('change', async (e) => {
+$('#backendBtns .btn').on('change', async (e) => {
   if (inputType === 'camera') {
     await stopCamRender();
   }
-  deviceType = $(e.target).attr('id');
+  [backend, deviceType] = $(e.target).attr('id').split('_');
   layout = await utils.getDefaultLayout(deviceType);
-  const showUint8 = layout === 'nhwc' ? true : false;
-  ui.handleBtnUI('#uint8Label', !showUint8);
-  ui.handleBtnUI('#float16Label', false);
-  // Only show the supported models for each deviceType.
-  if (deviceType == 'npu') {
-    ui.handleBtnUI('#float32Label', true);
-    $('#float16').click();
-  } else {
+  // Only show the supported models for each deviceType. Now fp16 nchw models
+  // are only supported on gpu/npu.
+  if (deviceType == 'gpu') {
+    ui.handleBtnUI('#float16Label', false);
     ui.handleBtnUI('#float32Label', false);
+    ui.handleBtnUI('#uint8Label', true);
     $('#float32').click();
+    utils.displayAvailableModels(modelList, modelIds, deviceType, dataType);
+  } else if (deviceType == 'npu') {
+    ui.handleBtnUI('#float16Label', false);
+    ui.handleBtnUI('#float32Label', true);
+    ui.handleBtnUI('#uint8Label', true);
+    $('#float16').click();
+    utils.displayAvailableModels(modelList, modelIds, deviceType, 'float16');
+  } else {
+    ui.handleBtnUI('#float16Label', true);
+    ui.handleBtnUI('#float32Label', false);
+    ui.handleBtnUI('#uint8Label', false);
+    $('#float32').click();
+    utils.displayAvailableModels(modelList, modelIds, deviceType, 'float32');
   }
 
-  utils.displayAvailableModels(modelList, modelIds, layout, dataType);
   // Uncheck selected model
-  if (modelName != '') {
-    $(`#${modelName}`).parent().removeClass('active');
+  if (modelId != '') {
+    $(`#${modelId}`).parent().removeClass('active');
   }
 });
 
@@ -113,7 +136,13 @@ $('#modelBtns .btn').on('change', async (e) => {
   if (inputType === 'camera') {
     await stopCamRender();
   }
-  modelName = $(e.target).attr('id');
+  modelId = $(e.target).attr('id');
+  modelName = modelId;
+  if (dataType == 'float16') {
+    modelName += 'fp16';
+  } else if (dataType == 'uint8') {
+    modelName += 'uint8';
+  }
 
   await main();
 });
@@ -127,15 +156,11 @@ $('#modelBtns .btn').on('change', async (e) => {
 // });
 
 $('#dataTypeBtns .btn').on('change', async (e) => {
-  if (inputType === 'camera') {
-    await stopCamRender();
-  }
-
   dataType = $(e.target).attr('id');
-  utils.displayAvailableModels(modelList, modelIds, layout, dataType);
+  utils.displayAvailableModels(modelList, modelIds, deviceType, dataType);
   // Uncheck selected model
-  if (modelName != '') {
-    $(`#${modelName}`).parent().removeClass('active');
+  if (modelId != '') {
+    $(`#${modelId}`).parent().removeClass('active');
   }
 });
 
@@ -185,6 +210,74 @@ function stopCamRender() {
       }
     }, 100);
   });
+}
+
+/**
+ * Initialize and automatically play background video for inference
+ */
+async function initBackgroundVideo() {
+  // Set default configuration for background video inference
+  backend = 'webnn';
+  deviceType = 'npu';
+  layout = 'nchw';
+  dataType = 'float16';
+  modelId = 'mobilenet';
+  modelName = 'mobilenetfp16';
+  inputType = 'bgvideo';
+  instanceType = modelName + layout;
+  lastdeviceType = deviceType;
+  lastBackend = backend;
+  
+  // Auto-select the appropriate buttons
+  $('#webnn_npu').prop('checked', true).parent().addClass('active');
+  $('#float16').prop('checked', true).parent().addClass('active');
+  $('#mobilenet').prop('checked', true).parent().addClass('active');
+  
+  // Load the local video source directly
+  bgVideoElement.src = './video3.mp4';
+  console.log('Loading local video for background inference...');
+  
+  // Wait for video to be ready and start inference
+  bgVideoElement.onloadeddata = async () => {
+    console.log('Background video loaded, starting automatic inference...');
+    await main();
+  };
+}
+
+/**
+ * This method is used to render background video inference.
+ */
+async function renderBgVideoStream() {
+  if (bgVideoElement.paused || bgVideoElement.ended || !isBgVideoPlaying) return;
+  
+  // Check if video is ready
+  if (bgVideoElement.readyState < 2) {
+    bgVideoRafReq = requestAnimationFrame(renderBgVideoStream);
+    return;
+  }
+  
+  // Check if model is ready
+  if (!netInstance || !inputOptions || !labels) {
+    console.log('Model not ready yet, waiting...');
+    bgVideoRafReq = requestAnimationFrame(renderBgVideoStream);
+    return;
+  }
+  
+  isRendering = true;
+  const inputBuffer = utils.getInputTensor(bgVideoElement, inputOptions);
+  console.log('- Computing on background video... ');
+  const start = performance.now();
+  const outputBuffer = await netInstance.compute(inputBuffer);
+  computeTime = (performance.now() - start).toFixed(2);
+  console.log(`  done in ${computeTime} ms.`);
+  showPerfResult();
+  await drawOutput(outputBuffer, labels);
+  $('#fps').text(`${(1000/computeTime).toFixed(0)} FPS`);
+  isRendering = false;
+  
+  if (isBgVideoPlaying) {
+    bgVideoRafReq = requestAnimationFrame(renderBgVideoStream);
+  }
 }
 
 /**
@@ -278,64 +371,50 @@ function showPerfResult(medianComputeTime = undefined) {
   }
 }
 
-function constructNetObject(modelName, layout, dataType) {
-  switch (modelName) {
-    case 'efficientnet':
-      if (layout == 'nchw' && dataType == 'float16') {
-        return new EfficientNetFP16Nchw();
-      }
-      break;
-    case 'mobilenet':
-      if (layout == 'nhwc' && dataType == 'uint8') {
-        return new MobileNetV2Uint8Nhwc();
-      } else if (dataType != 'uint8') {
-        return layout == 'nhwc' ?
-            new MobileNetV2Nhwc(dataType) : new MobileNetV2Nchw(dataType);
-      }
-      break;
-    case 'resnet50v1':
-      if (layout == 'nchw' && dataType == 'float16') {
-        return new ResNet50V1FP16Nchw();
-      }
-      break;
-    case 'resnet50v2':
-      if (dataType != 'uint8') {
-        return layout == 'nhwc' ?
-            new ResNet50V2Nhwc(dataType) : new ResNet50V2Nchw(dataType);
-      }
-      break;
-    case 'squeezenet':
-      if (dataType != 'uint8') {
-        return layout == 'nhwc' ?
-            new SqueezeNetNhwc() : new SqueezeNetNchw();
-      }
-      break;
-  }
+function constructNetObject(type) {
+  const netObject = {
+    'mobilenetfp16nchw': new MobileNetV2Nchw('float16'),
+    'resnet50v1fp16nchw': new ResNet50V1FP16Nchw(),
+    'efficientnetfp16nchw': new EfficientNetFP16Nchw(),
+    'mobilenetnchw': new MobileNetV2Nchw(),
+    'mobilenetnhwc': new MobileNetV2Nhwc(),
+    'mobilenetuint8nhwc': new MobileNetV2Uint8Nhwc(),
+    'squeezenetnchw': new SqueezeNetNchw(),
+    'squeezenetnhwc': new SqueezeNetNhwc(),
+    'resnet50v2nchw': new ResNet50V2Nchw(),
+    'resnet50v2nhwc': new ResNet50V2Nhwc(),
+  };
 
-  throw new Error(`Unknown model, name: ${modelName}, layout: ${layout}, ` +
-     `dataType: ${dataType}`);
+  return netObject[type];
 }
 
 async function main() {
   try {
     if (modelName === '') return;
     ui.handleClick(disabledSelectors, true);
-    if (instanceType == '') $('#hint').hide();
+    if (isFirstTimeLoad) $('#hint').hide();
     let start;
     const [numRuns, powerPreference] = utils.getUrlParams();
 
     // Only do load() and build() when model first time loads,
-    // there's new model choosed
-    if (instanceType !== modelName + dataType + layout + deviceType) {
-      instanceType = modelName + dataType + layout + deviceType;
-      netInstance = constructNetObject(modelName, layout, dataType);
+    // there's new model choosed, backend changed or device changed
+    if (isFirstTimeLoad || instanceType !== modelName + layout ||
+        lastdeviceType != deviceType || lastBackend != backend) {
+      if (lastdeviceType != deviceType || lastBackend != backend) {
+        // Set backend and device
+        lastdeviceType = lastdeviceType != deviceType ?
+            deviceType : lastdeviceType;
+        lastBackend = lastBackend != backend ? backend : lastBackend;
+      }
+      instanceType = modelName + layout;
+      netInstance = constructNetObject(instanceType);
       inputOptions = netInstance.inputOptions;
       labels = await fetchLabels(inputOptions.labelUrl);
-      console.log(
-          `- Model: ${modelName} - ${layout} - ${dataType} - ${deviceType}`);
+      isFirstTimeLoad = false;
+      console.log(`- Model name: ${modelName}, Model layout: ${layout} -`);
       // UI shows model loading progress
       await ui.showProgressComponent('current', 'pending', 'pending');
-      console.log('- Loading weights...');
+      console.log('- Loading weights... ');
       const contextOptions = {deviceType};
       if (powerPreference) {
         contextOptions['powerPreference'] = powerPreference;
@@ -386,6 +465,13 @@ async function main() {
       camElement.srcObject = stream;
       stopRender = false;
       camElement.onloadeddata = await renderCamStream();
+      await ui.showProgressComponent('done', 'done', 'done');
+      ui.readyShowResultComponents();
+    } else if (inputType === 'bgvideo') {
+      // Background video inference
+      isBgVideoPlaying = true;
+      bgVideoElement.play();
+      await renderBgVideoStream();
       await ui.showProgressComponent('done', 'done', 'done');
       ui.readyShowResultComponents();
     } else {
