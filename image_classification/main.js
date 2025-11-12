@@ -37,7 +37,7 @@ let inputOptions;
 let deviceType = '';
 let stopRender = true;
 let isRendering = false;
-alert("hii");
+
 const disabledSelectors = ['#tabs > li', '.btn'];
 
 const modelIds = [
@@ -94,10 +94,14 @@ async function autoSetup() {
   dataType = 'float16';
   modelName = 'mobilenet';
 
+  // Set input to video early to avoid image inference error
+  inputType = 'camera';
+
   // Update UI to reflect selections (no event triggers to avoid races)
   $('#npu').prop('checked', true).parent().addClass('active');
   $('#float16').prop('checked', true).parent().addClass('active');
   $('#mobilenet').prop('checked', true).parent().addClass('active');
+  $('#cam').parent().addClass('active');  // Highlight camera tab
 
   // Apply device-specific UI adjustments (from device change handler)
   const showUint8 = layout === 'nhwc' ? true : false;
@@ -120,15 +124,10 @@ async function autoSetup() {
 
   console.log(`- Auto-setup: Model: ${modelName} - ${layout} - ${dataType} - ${deviceType}`);
 
-  // Load and build model on NPU first (instanceType will trigger reload)
+  // Single main() call: loads/builds on NPU and sets up video rendering
   $('#hint').hide();
-  await main();
-
-  // Now switch to video input and start rendering
-  inputType = 'camera';
-  $('#cam').click();  // Triggers tab switch, but main() handles video
   $('.shoulddisplay').hide();
-  await main();  // Set up video and start renderCamStream
+  await main();
 }
 
 $(document).ready(async () => {
@@ -477,4 +476,3 @@ async function main() {
     ui.handleClick(disabledSelectors, false);
   }
 }
-
