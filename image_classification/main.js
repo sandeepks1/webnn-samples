@@ -81,7 +81,6 @@ async function fetchLabels(url) {
 }
 
 async function autoSetup() {
-  // Sequential automation to ensure NPU engages properly
   if (!(await utils.isWebNN())) {
     console.log(utils.webNNNotSupportMessage());
     ui.addAlert(utils.webNNNotSupportMessageHTML());
@@ -89,26 +88,52 @@ async function autoSetup() {
     return;
   }
 
-  // Step 1: Select NPU and await change handler
-  $('#npu').prop('checked', true).trigger('change');
-  await new Promise(resolve => setTimeout(resolve, 200));  // Allow layout/dataType adjust
+  // Directly set NPU configurations (mimics manual selection order)
+  deviceType = 'npu';
+  layout = await utils.getDefaultLayout(deviceType);  // Typically 'nchw' for NPU
+  dataType = 'float16';
+  modelName = 'mobilenet';
 
-  // Step 2: Select Float16 (NPU handler already prefers it, but ensure)
-  $('#float16').prop('checked', true).trigger('change');
-  await new Promise(resolve => setTimeout(resolve, 200));  // Propagate dataType
+  // Update UI to reflect selections (no event triggers to avoid races)
+  $('#npu').prop('checked', true).parent().addClass('active');
+  $('#float16').prop('checked', true).parent().addClass('active');
+  $('#mobilenet').prop('checked', true).parent().addClass('active');
 
-  // Step 3: Select MobileNetV2 and await initial model load (with NPU)
-  $('#mobilenet').prop('checked', true).trigger('change');
-  await new Promise(resolve => setTimeout(resolve, 1000));  // Wait for load/build to complete
+  // Apply device-specific UI adjustments (from device change handler)
+  const showUint8 = layout === 'nhwc' ? true : false;
+  ui.handleBtnUI('#uint8Label', !showUint8);
+  ui.handleBtnUI('#float16Label', false);
+  if (deviceType === 'npu') {
+    ui.handleBtnUI('#float32Label', true);
+  } else {
+    ui.handleBtnUI('#float32Label', false);
+  }
 
-  // Step 4: Switch to video input (camera tab, but using video file)
+  // Update available models display (from dataType/device handlers)
+  utils.displayAvailableModels(modelList, modelIds, layout, dataType);
+
+  // Uncheck any prior model visually
+  if (modelName !== '') {
+    $(`#${modelName}`).parent().removeClass('active');
+  }
+  $(`#${modelName}`).parent().addClass('active');
+
+  console.log(`- Auto-setup: Model: ${modelName} - ${layout} - ${dataType} - ${deviceType}`);
+
+  // Load and build model on NPU first (instanceType will trigger reload)
+  $('#hint').hide();
+  await main();
+
+  // Now switch to video input and start rendering
   inputType = 'camera';
-  $('#cam').click();
+  $('#cam').click();  // Triggers tab switch, but main() handles video
+  $('.shoulddisplay').hide();
+  await main();  // Set up video and start renderCamStream
 }
 
 $(document).ready(async () => {
   $('.icdisplay').hide();
-  await autoSetup();  // Run automated setup
+  await autoSetup();
 });
 
 $('#deviceTypeBtns .btn').on('change', async (e) => {
