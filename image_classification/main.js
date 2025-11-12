@@ -55,7 +55,7 @@ const modelList = {
       'squeezenet',
       'resnet50v2',
     ],
-    'float16': [
+    'float32': [
       'mobilenet',
       'squeezenet',
       'resnet50v2',
@@ -456,6 +456,8 @@ async function main() {
       camElement.src = './video3.mp4';
       camElement.crossOrigin = 'anonymous';  // For potential CORS if needed
       camElement.loop = true;  // Loop video for continuous inference
+      camElement.muted = true;  // Enable muted autoplay (always allowed)
+      camElement.autoplay = true;  // Leverage browser policy for auto-start
       stopRender = false;
       
       // Wait for video to load
@@ -463,6 +465,7 @@ async function main() {
         camElement.addEventListener('loadeddata', resolve, { once: true });
       });
       
+      // Play with error handling (muted should bypass gesture requirement)
       camElement.play().catch(e => console.error('Video play error:', e));
       camElement.onloadeddata = renderCamStream;  // Start rendering loop
       await ui.showProgressComponent('done', 'done', 'done');
