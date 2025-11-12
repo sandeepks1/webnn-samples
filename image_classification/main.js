@@ -157,6 +157,7 @@ $('#modelBtns .btn').on('change', async (e) => {
 
 $('#dataTypeBtns .btn').on('change', async (e) => {
   dataType = $(e.target).attr('id');
+  console.log(`Data type changed to: ${dataType}`);
   utils.displayAvailableModels(modelList, modelIds, deviceType, dataType);
   // Uncheck selected model
   if (modelId != '') {
@@ -233,10 +234,12 @@ async function initBackgroundVideo() {
   ui.handleBtnUI('#float32Label', true);
   ui.handleBtnUI('#uint8Label', true);
   
-  // Auto-select the appropriate buttons
+  // Auto-select the appropriate buttons and trigger their change events
   $('#webnn_npu').prop('checked', true).parent().addClass('active');
   $('#float32').parent().removeClass('active'); // Deselect Float32
   $('#float16').prop('checked', true).parent().addClass('active');
+  // Manually trigger the float16 change to update dataType variable
+  $('#float16').trigger('change');
   $('#mobilenet').prop('checked', true).parent().addClass('active');
   
   // Display available models for NPU
