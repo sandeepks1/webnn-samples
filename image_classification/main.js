@@ -219,7 +219,7 @@ async function initBackgroundVideo() {
   // Set default configuration for background video inference
   backend = 'webnn';
   deviceType = 'npu';
-  layout = 'nchw';
+  layout = await utils.getDefaultLayout(deviceType);
   dataType = 'float16';
   modelId = 'mobilenet';
   modelName = 'mobilenetfp16';
@@ -228,14 +228,24 @@ async function initBackgroundVideo() {
   lastdeviceType = deviceType;
   lastBackend = backend;
   
+  // Update UI to show only Float16 is selected (deselect Float32)
+  ui.handleBtnUI('#float16Label', false);
+  ui.handleBtnUI('#float32Label', true);
+  ui.handleBtnUI('#uint8Label', true);
+  
   // Auto-select the appropriate buttons
   $('#webnn_npu').prop('checked', true).parent().addClass('active');
+  $('#float32').parent().removeClass('active'); // Deselect Float32
   $('#float16').prop('checked', true).parent().addClass('active');
   $('#mobilenet').prop('checked', true).parent().addClass('active');
+  
+  // Display available models for NPU
+  utils.displayAvailableModels(modelList, modelIds, deviceType, dataType);
   
   // Load the local video source directly
   bgVideoElement.src = './video3.mp4';
   console.log('Loading local video for background inference...');
+  console.log(`Device: ${deviceType}, Layout: ${layout}, Data Type: ${dataType}`);
   
   // Wait for video to be ready and start inference
   bgVideoElement.onloadeddata = async () => {
