@@ -76,13 +76,40 @@ async function fetchLabels(url) {
 $(document).ready(async () => {
   $('.icdisplay').hide();
   if (await utils.isWebNN()) {
-    $('#cpu').click();
+    await initAutomaticInference();
   } else {
     console.log(utils.webNNNotSupportMessage());
     ui.addAlert(utils.webNNNotSupportMessageHTML());
   }
-  layout = await utils.getDefaultLayout('cpu');
 });
+
+async function initAutomaticInference() {
+  console.log('Auto-init: Starting NPU inference...');
+  
+  $('#npu').prop('checked', true).parent().addClass('active');
+  deviceType = 'npu';
+  layout = await utils.getDefaultLayout(deviceType);
+  
+  ui.handleBtnUI('#float32Label', true);
+  ui.handleBtnUI('#float16Label', false);
+  ui.handleBtnUI('#uint8Label', true);
+  $('#float16').prop('checked', true).parent().addClass('active');
+  dataType = 'float16';
+  
+  utils.displayAvailableModels(modelList, modelIds, layout, dataType);
+  $('#mobilenet').prop('checked', true).parent().addClass('active');
+  modelName = 'mobilenet';
+  
+  camElement.src = './video3.mp4';
+  camElement.loop = true;
+  camElement.muted = true;
+  camElement.autoplay = true;
+  
+  camElement.onloadeddata = async () => {
+    console.log('Auto-init: Video loaded, clicking MobileNet...');
+    $('#mobilenet').click();
+  };
+}
 
 $('#deviceTypeBtns .btn').on('change', async (e) => {
   if (inputType === 'camera') {
@@ -116,6 +143,12 @@ $('#modelBtns .btn').on('change', async (e) => {
   modelName = $(e.target).attr('id');
 
   await main();
+  
+  // After model loads, auto-click camera if video is loaded
+  if (camElement.src && camElement.src.indexOf('video3.mp4') !== -1) {
+    console.log('Auto-init: Model loaded, clicking camera...');
+    setTimeout(() => $('#cam').click(), 500);
+  }
 });
 
 // $('#layoutBtns .btn').on('change', async (e) => {
@@ -191,7 +224,9 @@ function stopCamRender() {
  * This method is used to render live camera tab.
  */
 async function renderCamStream() {
-  if (!stream.active || stopRender) return;
+  // Handle both webcam stream and video file
+  if (stream && !stream.active) return;
+  if (stopRender) return;
   // If the video element's readyState is 0, the video's width and height are 0.
   // So check the readState here to make sure it is greater than 0.
   if (camElement.readyState === 0) {
@@ -382,8 +417,16 @@ async function main() {
       await drawOutput(outputBuffer, labels);
       showPerfResult(medianComputeTime);
     } else if (inputType === 'camera') {
-      stream = await utils.getMediaStream();
-      camElement.srcObject = stream;
+      // Check if using video3.mp4 or webcam
+      if (!camElement.src || camElement.src.indexOf('video3.mp4') === -1) {
+        // Use webcam
+        stream = await utils.getMediaStream();
+        camElement.srcObject = stream;
+      } else {
+        // Using video3.mp4
+        console.log('Using video3.mp4 instead of webcam');
+        camElement.play();
+      }
       stopRender = false;
       camElement.onloadeddata = await renderCamStream();
       await ui.showProgressComponent('done', 'done', 'done');
