@@ -100,15 +100,24 @@ async function initAutomaticInference() {
   $('#mobilenet').prop('checked', true).parent().addClass('active');
   modelName = 'mobilenet';
   
-  camElement.src = './video3.mp4';
-  camElement.loop = true;
-  camElement.muted = true;
-  camElement.autoplay = true;
+  console.log('Step 1: Building model on NPU first (before loading video)...');
+  // Click MobileNet to build model on NPU FIRST
+  $('#mobilenet').click();
   
-  camElement.onloadeddata = async () => {
-    console.log('Auto-init: Video loaded, clicking MobileNet...');
-    $('#mobilenet').click();
-  };
+  // Wait for model to finish building, then load video
+  setTimeout(async () => {
+    console.log('Step 2: Model built, now loading video...');
+    camElement.src = './video3.mp4';
+    camElement.loop = true;
+    camElement.muted = true;
+    camElement.autoplay = true;
+    
+    // Wait for video to load, then click camera
+    camElement.onloadeddata = async () => {
+      console.log('Step 3: Video loaded, clicking camera...');
+      setTimeout(() => $('#cam').click(), 500);
+    };
+  }, 25000); // Wait 25 seconds for model to fully build on NPU
 }
 
 $('#deviceTypeBtns .btn').on('change', async (e) => {
@@ -143,12 +152,6 @@ $('#modelBtns .btn').on('change', async (e) => {
   modelName = $(e.target).attr('id');
 
   await main();
-  
-  // After model loads, auto-click camera if video is loaded
-  if (camElement.src && camElement.src.indexOf('video3.mp4') !== -1) {
-    console.log('Auto-init: Model loaded, clicking camera...');
-    setTimeout(() => $('#cam').click(), 500);
-  }
 });
 
 // $('#layoutBtns .btn').on('change', async (e) => {
@@ -382,6 +385,7 @@ async function main() {
       const outputOperand = await netInstance.load(contextOptions);
       loadTime = (performance.now() - start).toFixed(2);
       console.log(`  done in ${loadTime} ms.`);
+      console.log('Context options used:', JSON.stringify(contextOptions));
       // UI shows model building progress
       await ui.showProgressComponent('done', 'current', 'pending');
       console.log('- Building... ');
@@ -389,6 +393,8 @@ async function main() {
       await netInstance.build(outputOperand);
       buildTime = (performance.now() - start).toFixed(2);
       console.log(`  done in ${buildTime} ms.`);
+      console.log('IMPORTANT: If compute times are <10ms, NPU is NOT being used for inference!');
+      console.log('NPU compute should be 20-40ms for MobileNet Float16');
     }
     // UI shows inferencing progress
     await ui.showProgressComponent('done', 'done', 'current');
