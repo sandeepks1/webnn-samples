@@ -368,6 +368,7 @@ async function main() {
       labels = await fetchLabels(inputOptions.labelUrl);
       console.log(
           `- Model: ${modelName} - ${layout} - ${dataType} - ${deviceType}`);
+      console.log(`- Device: ${deviceType} (NPU should spike in Task Manager)`);
       // UI shows model loading progress
       await ui.showProgressComponent('current', 'pending', 'pending');
       console.log('- Loading weights...');
@@ -422,13 +423,19 @@ async function main() {
         // Use webcam
         stream = await utils.getMediaStream();
         camElement.srcObject = stream;
+        stopRender = false;
+        camElement.onloadeddata = await renderCamStream();
       } else {
         // Using video3.mp4
-        console.log('Using video3.mp4 instead of webcam');
-        camElement.play();
+        console.log('Using video3.mp4 for NPU inference');
+        stopRender = false;
+        // Make sure video is playing
+        await camElement.play();
+        // Wait a bit for video to be ready, then start rendering
+        setTimeout(() => {
+          renderCamStream();
+        }, 200);
       }
-      stopRender = false;
-      camElement.onloadeddata = await renderCamStream();
       await ui.showProgressComponent('done', 'done', 'done');
       ui.readyShowResultComponents();
     } else {
