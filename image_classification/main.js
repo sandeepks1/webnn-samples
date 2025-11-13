@@ -236,11 +236,13 @@ async function renderCamStream() {
   isRendering = true;
   const inputBuffer = utils.getInputTensor(camElement, inputOptions);
   const inputCanvas = utils.getVideoFrame(camElement);
-  console.log('- Computing... ');
   const start = performance.now();
   const outputBuffer = await netInstance.compute(inputBuffer);
   computeTime = (performance.now() - start).toFixed(2);
-  console.log(`  done in ${computeTime} ms.`);
+  // Only log every 30 frames to avoid console spam
+  if (Math.random() < 0.033) {
+    console.log(`Video inference: ${computeTime}ms (using ${deviceType} device)`);
+  }
   drawInput(inputCanvas, 'camInCanvas');
   showPerfResult();
   await drawOutput(outputBuffer, labels);
@@ -427,7 +429,12 @@ async function main() {
         camElement.onloadeddata = await renderCamStream();
       } else {
         // Using video3.mp4
-        console.log('Using video3.mp4 for NPU inference');
+        console.log('===== USING VIDEO3.MP4 WITH NPU =====');
+        console.log(`Model instance device: ${deviceType}`);
+        console.log(`Model was built on: ${deviceType}`);
+        console.log(`Instance type: ${instanceType}`);
+        console.log('All inferences will use NPU since model was built on NPU');
+        console.log('=====================================');
         stopRender = false;
         // Make sure video is playing
         await camElement.play();
